@@ -45,6 +45,7 @@ Next.js 16 (App Router) 기반의 쇼핑 리뷰 분석 RAG(Retrieval-Augmented G
 5. **Environment Variables**:
    - 환경변수는 하드코딩하지 않고 항상 `process.env.*`를 참조합니다.
    - Supabase 공개 키는 `process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY` 순으로(비어 있지 않은 첫 값) fallback 처리합니다. (구 프로젝트라 anon 키만 보이는 경우 `NEXT_PUBLIC_SUPABASE_ANON_KEY`를 사용)
+   - 서버 전용 `SUPABASE_SERVICE_ROLE_KEY`가 있으면 위 공개 키보다 먼저 쓴다. 이 키는 RLS를 우회하므로 `NEXT_PUBLIC_` 접두사를 붙이거나 클라이언트 코드에서 읽지 않는다. `supabase/harden-rls.sql`로 공개 키의 접근을 막은 뒤에는 이 키가 필수다.
    - 사용하는 환경변수 (`.env.local`에 두며 git에 올리지 않는다):
      - `USE_MOCK`: `'false'`가 아니면 Mock 모드. 4단계 구현이 끝나기 전에는 `true`를 유지한다.
      - `KIMI_API_KEY`: LLM(Kimi) API 키. 선택: `KIMI_MODEL`(기본 `kimi-k2.6`), `KIMI_BASE_URL`(기본 `https://api.moonshot.ai/v1`).

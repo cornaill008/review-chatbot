@@ -37,6 +37,7 @@ const ALL_NAMES = [
   ...Object.keys(FULL_ENV),
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
 ];
 
 function setEnv(env: Record<string, string | undefined>) {
@@ -151,6 +152,24 @@ describe("Supabase 공개 키 우선순위", () => {
 
   it("셋 다 없으면 키 이름을 안내하는 ConfigError", () => {
     expect(configErrorFor(withoutKey).missing).toEqual(["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]);
+  });
+
+  it("SUPABASE_SERVICE_ROLE_KEY가 있으면 공개 키보다 먼저 쓴다", () => {
+    setEnv({ ...FULL_ENV, ...KEYS, SUPABASE_SERVICE_ROLE_KEY: "service-key-444444" });
+
+    expect(readRealConfig().supabaseKey).toBe("service-key-444444");
+  });
+
+  it("서버 전용 키만 있어도 공개 키 없이 설정이 완성된다", () => {
+    setEnv({ ...withoutKey, SUPABASE_SERVICE_ROLE_KEY: "service-key-444444" });
+
+    expect(readRealConfig().supabaseKey).toBe("service-key-444444");
+  });
+
+  it("서버 전용 키가 공백이면 공개 키로 돌아간다", () => {
+    setEnv({ ...FULL_ENV, SUPABASE_SERVICE_ROLE_KEY: "   " });
+
+    expect(readRealConfig().supabaseKey).toBe(FULL_ENV.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
   });
 
   it("앞뒤 공백은 잘라서 쓴다", () => {

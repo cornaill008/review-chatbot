@@ -5,7 +5,13 @@ import { ConfigError } from "@/lib/errors";
 /** 리뷰 레코드를 넣는 Pinecone 네임스페이스 */
 export const REVIEW_NAMESPACE = "reviews";
 
-/** Supabase 공개 키 후보. 앞에서부터 비어 있지 않은 첫 값을 쓴다. */
+/**
+ * 서버 전용 Supabase 키(service_role/secret). 있으면 공개 키보다 먼저 쓴다.
+ * RLS를 우회하므로 NEXT_PUBLIC_ 접두사를 붙이거나 클라이언트 코드에서 읽으면 안 된다.
+ */
+const SUPABASE_SERVICE_KEY_NAME = "SUPABASE_SERVICE_ROLE_KEY";
+
+/** Supabase 공개 키 후보. 서버 전용 키가 없을 때 앞에서부터 비어 있지 않은 첫 값을 쓴다. */
 const SUPABASE_KEY_NAMES = [
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
@@ -31,7 +37,7 @@ export function readRealConfig(): RealConfig {
   const pineconeApiKey = read("PINECONE_API_KEY");
   const pineconeIndexName = read("PINECONE_INDEX_NAME");
   const supabaseUrl = read("NEXT_PUBLIC_SUPABASE_URL");
-  const supabaseKey = SUPABASE_KEY_NAMES.map(read).find(Boolean);
+  const supabaseKey = read(SUPABASE_SERVICE_KEY_NAME) ?? SUPABASE_KEY_NAMES.map(read).find(Boolean);
 
   const missing: string[] = [];
   if (!pineconeApiKey) missing.push("PINECONE_API_KEY");
