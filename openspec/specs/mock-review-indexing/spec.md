@@ -21,7 +21,7 @@
 - **THEN** 기존 데이터는 새 데이터로 대체되어 리뷰가 중복 적재되지 않는다
 
 ### Requirement: 리뷰 레코드 필드
-시스템은 각 리뷰를 `id`, `rating`, `author`, `title`, `content`, `date`, `helpfulVotes` 필드로 보관해야 한다(SHALL). 검색 대상 텍스트는 제목과 내용을 합친 값이다. `date`는 CSV의 문자열 그대로 보관하고, `helpfulVotes`는 CSV의 `helpful_votes`를 정수로 변환한 값이며 변환할 수 없으면 0이다.
+시스템은 각 리뷰를 `id`, `rating`, `author`, `title`, `content`, `date`, `helpfulVotes`, `verifiedPurchase` 필드로 보관해야 한다(SHALL). 검색 대상 텍스트는 제목과 내용을 합친 값이다. `date`는 CSV의 문자열 그대로 보관하고, `helpfulVotes`는 CSV의 `helpful_votes`를 정수로 변환한 값이며 변환할 수 없으면 0이다. `verifiedPurchase`는 CSV의 `verified_purchase`가 `true`(대소문자 무시)이면 참, 그 외나 누락이면 거짓이다.
 
 #### Scenario: 필드 보존
 - **WHEN** CSV의 한 행이 적재된다
@@ -34,6 +34,14 @@
 #### Scenario: 도움이 됨 수 누락
 - **WHEN** `helpful_votes` 컬럼이 없거나 값이 숫자가 아니다
 - **THEN** 해당 리뷰의 `helpfulVotes`는 0이고 적재는 계속된다
+
+#### Scenario: 구매 인증 변환
+- **WHEN** CSV 행의 `verified_purchase`가 `true` 또는 `TRUE`이다
+- **THEN** 해당 리뷰의 `verifiedPurchase`는 참이다
+
+#### Scenario: 구매 인증 누락
+- **WHEN** `verified_purchase` 컬럼이 없거나 값이 `false`이거나 다른 문자열이다
+- **THEN** 해당 리뷰의 `verifiedPurchase`는 거짓이고 적재는 계속된다
 
 ### Requirement: 리뷰 id 보존
 시스템은 CSV에 `id` 컬럼이 있고 값이 비어 있지 않으면 그 값을 리뷰의 `id`로 그대로 사용해야 한다(SHALL). 값이 비어 있거나 다른 행과 중복되면 적재 순서에 따라 고유한 id를 대신 부여한다.
