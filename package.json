@@ -10,8 +10,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@langchain/anthropic": "^1.5.12",
     "@langchain/core": "^1.2.18",
+    "@langchain/openai": "^1.6.2",
+    "@pinecone-database/pinecone": "^9.0.0",
+    "@supabase/supabase-js": "^2.118.0",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
     "papaparse": "^5.7.0",

@@ -7,24 +7,29 @@ Next.js 16 (App Router) 기반의 쇼핑 리뷰 분석 RAG(Retrieval-Augmented G
 ## Tech Stack & Architecture
 - **Framework**: Next.js 16 (App Router), React 19, TypeScript
 - **Styling**: Tailwind CSS, Lucide React
-- **Generation**: LangChain.js (`@langchain/core`, `@langchain/anthropic`) — 프롬프트 조립 및 답변 생성 전용
+- **Generation**: LangChain.js (`@langchain/core`, `@langchain/openai`) — 프롬프트 조립 및 답변 생성 전용 (Kimi는 OpenAI 호환 API라 `ChatOpenAI`에 `baseURL`을 지정해 사용)
 - **Data & Retrieval Strategy (`USE_MOCK` 환경변수 분기)**:
   - **Mock Mode (`process.env.USE_MOCK !== 'false'`)**: 로컬 `samples/review.csv`를 파싱하여 키워드/토큰 매칭 점수로 상위 5건을 검색하고, 대화 히스토리는 서버 인메모리 배열에 저장 (외부 DB 가입 없이 즉시 동작)
   - **Real Mode (`process.env.USE_MOCK === 'false'`)**:
     - **Vector DB**: `@pinecone-database/pinecone` SDK 직접 호출 (`review-chatbot` 통합 임베딩 인덱스: `llama-text-embed-v2`, 1024 dim, cosine)
     - **Database**: Supabase PostgreSQL (`reviews`, `messages` tables)
-- **LLM**: Anthropic `claude-haiku-4-5` (주최측 제공 API Key 사용)
+- **LLM**: Kimi (Moonshot AI) `kimi-k2.6` — OpenAI 호환 API(`https://api.moonshot.ai/v1`), `KIMI_API_KEY` 사용.
+  - 모델과 엔드포인트는 `KIMI_MODEL`, `KIMI_BASE_URL`로 바꿀 수 있다(없으면 위 기본값). 이 키는 국제(`.ai`) 엔드포인트에서만 인증된다.
+  - `kimi-k2.6`은 `temperature`로 1만 허용하므로 지정하지 않고, 추론(thinking)은 끈다.
+  - `KIMI_API_KEY`가 없으면 답변 생성을 생략하고 검색 결과 JSON만 응답한다.
 - **Spec-Driven Development (SDD)**: OpenSpec (`openspec/`) 기반 명세 주도 개발 (`openspec init` ➡️ `/opsx:propose` ➡️ `/opsx:apply` ➡️ `/opsx:archive`)
 
 ## 🚫 절대 금지 사항 (Hard Constraints)
 1. **`@langchain/pinecone`의 `PineconeStore`를 사용하지 않는다.**
    본 프로젝트의 Pinecone 인덱스는 통합 임베딩 인덱스이므로 클라이언트 측 Embeddings 객체를 주입하는 `PineconeStore`와 호환되지 않는다.
 2. **`OpenAIEmbeddings` 등 외부 임베딩 라이브러리를 추가하지 않는다.**
-   Anthropic API는 임베딩 엔드포인트를 제공하지 않으며, 본 실습에는 임베딩용 키가 존재하지 않는다.
+   본 실습에는 임베딩용 키가 존재하지 않고, 임베딩은 Pinecone 통합 임베딩 인덱스가 서버 측에서 처리한다.
+   채팅 모델용 `@langchain/openai`의 `ChatOpenAI`(Kimi 호출)는 허용하며, 같은 패키지의 `OpenAIEmbeddings` 등 Embeddings 클래스는 사용하지 않는다.
 3. 실제 Pinecone 연동 단계(4단계)에서 벡터 적재는 반드시 `namespace.upsertRecords()`, 검색은 반드시 `namespace.searchRecords()`를 사용한다.
    - 적재 레코드 형태: `{ _id, text, rating, author, title, content }` (`text`가 임베딩 대상 필드)
    - 검색 결과: `res.result.hits[]` → 각 hit의 `_id` / `_score` / `fields`
-4. 모델 ID는 `claude-haiku-4-5`를 사용한다. 날짜 suffix를 붙이지 않는다.
+   - SDK 9.x 호출 형태: `ns.upsertRecords({ records })`(배열을 직접 넘기면 `options.records is not iterable`로 실패, 96개 이하씩 순차 호출), `ns.searchRecords({ query: { topK, inputs: { text } }, fields })`. 네임스페이스는 `reviews`.
+4. 모델 ID는 기본 `kimi-k2.6`이며 코드 곳곳에 적지 않고 `DEFAULT_MODEL` 상수와 `KIMI_MODEL` 환경변수로만 다룬다.
 
 ## Development Workflow & Rules
 1. **Spec-Driven Development (OpenSpec) or Plan First**:
@@ -39,7 +44,14 @@ Next.js 16 (App Router) 기반의 쇼핑 리뷰 분석 RAG(Retrieval-Augmented G
    - 한글 입력 시 IME 중복 전송 버그를 방지하기 위해 `onKeyDown` 이벤트에서 `e.nativeEvent.isComposing` 상태를 항상 체크합니다.
 5. **Environment Variables**:
    - 환경변수는 하드코딩하지 않고 항상 `process.env.*`를 참조합니다.
-   - Supabase 공개 키는 `process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY` 순으로 fallback 처리합니다.
+   - Supabase 공개 키는 `process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY` 순으로(비어 있지 않은 첫 값) fallback 처리합니다. (구 프로젝트라 anon 키만 보이는 경우 `NEXT_PUBLIC_SUPABASE_ANON_KEY`를 사용)
+   - 사용하는 환경변수 (`.env.local`에 두며 git에 올리지 않는다):
+     - `USE_MOCK`: `'false'`가 아니면 Mock 모드. 4단계 구현이 끝나기 전에는 `true`를 유지한다.
+     - `KIMI_API_KEY`: LLM(Kimi) API 키. 선택: `KIMI_MODEL`(기본 `kimi-k2.6`), `KIMI_BASE_URL`(기본 `https://api.moonshot.ai/v1`).
+     - `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`(`review-chatbot`): Pinecone 연결 정보(필수). `PINECONE_HOST`는 선택이며, 없거나 예시 값(`xxxx`)이면 SDK가 인덱스 이름으로 호스트를 찾는다.
+     - `NEXT_PUBLIC_SUPABASE_URL`, Supabase 공개 키(`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` 등 위 fallback 순서): Supabase 연결 정보(필수).
+     - 실데이터 모드에서 위 필수 변수가 하나라도 없으면 외부 요청 없이 빠진 변수 이름만 담은 오류를 응답한다.
+   - 키 값은 코드, 문서, 커밋 메시지에 적지 않는다. `.env.example`에는 변수 이름과 빈 값만 둔다.
 6. **API Response Format**:
    - 모든 API 응답은 `{ success: boolean, data?: unknown, error?: string }` (또는 `/api/chat`의 `{ success: boolean, answer?: string, sources?: SourceReview[], error?: string }`) 포맷을 일관되게 반환합니다.
 7. **Git Commit Rule**:
