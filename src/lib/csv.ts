@@ -49,6 +49,7 @@ export function parseReviews(text: string): Review[] {
       content,
       date: (row.date ?? "").trim(),
       helpfulVotes: Number.isFinite(votes) && votes > 0 ? votes : 0,
+      verifiedPurchase: /^true$/i.test((row.verified_purchase ?? "").trim()),
     });
   }
   return reviews;

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getRepository, isMockMode } from "@/lib/repository";
+import { currentMode, getRepository, isMockMode } from "@/lib/repository";
 import { MockReviewRepository } from "@/lib/repository/mock";
+import { RealReviewRepository } from "@/lib/repository/real";
 import { resetMockStore } from "@/lib/review-store";
 import type { Review } from "@/lib/types";
 
 const fixture: Review[] = [
-  { id: "r1", rating: 5, author: "a", title: "배터리", content: "오래 가요", date: "2024-01-01", helpfulVotes: 3 },
-  { id: "r2", rating: 3, author: "b", title: "음질", content: "보통이에요", date: "2024-01-02", helpfulVotes: 9 },
+  { id: "r1", rating: 5, author: "a", title: "배터리", content: "오래 가요", date: "2024-01-01", helpfulVotes: 3, verifiedPurchase: false },
+  { id: "r2", rating: 3, author: "b", title: "음질", content: "보통이에요", date: "2024-01-02", helpfulVotes: 9, verifiedPurchase: false },
 ];
 
 beforeEach(() => resetMockStore());
@@ -115,9 +116,29 @@ describe("getRepository / isMockMode", () => {
     expect(isMockMode()).toBe(true);
   });
 
-  it("'false'이면 실데이터 모드이며 아직 구현되지 않았음을 알린다", () => {
+  it("'false'이면 실데이터 모드이고 실데이터 저장소를 돌려준다 (더 이상 '구현되지 않음' 오류가 아니다)", () => {
     vi.stubEnv("USE_MOCK", "false");
+
     expect(isMockMode()).toBe(false);
-    expect(() => getRepository()).toThrow(/구현되지 않았습니다/);
+    expect(getRepository()).toBeInstanceOf(RealReviewRepository);
+    expect(getRepository()).not.toBeInstanceOf(MockReviewRepository);
+  });
+
+  it("USE_MOCK을 바꾸면 다음 호출부터 해당 모드의 저장소를 돌려준다", () => {
+    vi.stubEnv("USE_MOCK", "false");
+    const real = getRepository();
+    vi.stubEnv("USE_MOCK", "true");
+    const mock = getRepository();
+    vi.stubEnv("USE_MOCK", "false");
+
+    expect(mock).toBeInstanceOf(MockReviewRepository);
+    expect(getRepository()).toBe(real); // 모드별로 한 번만 만든다
+  });
+
+  it("currentMode는 모드에 맞는 값을 돌려준다", () => {
+    vi.stubEnv("USE_MOCK", "false");
+    expect(currentMode()).toBe("real");
+    vi.stubEnv("USE_MOCK", undefined);
+    expect(currentMode()).toBe("mock");
   });
 });

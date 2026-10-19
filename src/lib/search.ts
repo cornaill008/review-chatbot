@@ -39,12 +39,17 @@ export function relevanceOf(review: Review, tokens: string[]): number {
   return relevance;
 }
 
-function toScore(combined: number): number {
-  return Math.round((SCORE_MIN + SCORE_SPAN * combined) * 100) / 100;
+/**
+ * 0~1 점수를 표시용 0.65~0.98(소수 둘째 자리)로 바꾼다. 범위를 벗어나거나 숫자가 아니면 0~1로 제한한다.
+ * Mock의 조합 점수와 실데이터 모드의 Pinecone 유사도(`_score`)가 같은 식을 쓴다.
+ */
+export function toDisplayScore(score: number): number {
+  const clamped = Number.isFinite(score) ? Math.min(1, Math.max(0, score)) : 0;
+  return Math.round((SCORE_MIN + SCORE_SPAN * clamped) * 100) / 100;
 }
 
 function toSource({ id, title, content, rating, author, date }: Review, combined: number): SourceReview {
-  return { id, title, content, rating, author, date, score: toScore(combined) };
+  return { id, title, content, rating, author, date, score: toDisplayScore(combined) };
 }
 
 /**

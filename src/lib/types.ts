@@ -10,6 +10,8 @@ export interface Review {
   date: string;
   /** CSV `helpful_votes`를 정수로 변환한 값(변환할 수 없으면 0) */
   helpfulVotes: number;
+  /** CSV `verified_purchase`가 `true`(대소문자 무시)이면 true, 그 외·누락이면 false */
+  verifiedPurchase: boolean;
 }
 
 /** 검색 결과로 응답에 담기는 리뷰. `score`는 0.65~0.98로 정규화한 표시용 값이다(코사인 유사도가 아님). */
@@ -26,6 +28,8 @@ export interface SourceReview {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  /** 어시스턴트 답변의 근거 리뷰. 실데이터 모드에서 `messages.sources`에 함께 저장한다(Mock은 무시). */
+  sources?: SourceReview[];
 }
 
 /** 일반 API 응답 포맷 (`/api/chat` 제외). 성공 응답에는 현재 데이터 모드가 함께 실린다. */

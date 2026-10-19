@@ -19,8 +19,8 @@ describe("parseReviews", () => {
     const reviews = parseReviews(csv);
 
     expect(reviews).toEqual([
-      { id: "review-1", rating: 5, author: "김민수", title: "좋아요", content: "S, M, L 세 가지라 좋아요", date: "", helpfulVotes: 0 },
-      { id: "review-2", rating: 3, author: "이서연", title: "보통", content: "그냥 그래요", date: "", helpfulVotes: 0 },
+      { id: "review-1", rating: 5, author: "김민수", title: "좋아요", content: "S, M, L 세 가지라 좋아요", date: "", helpfulVotes: 0, verifiedPurchase: false },
+      { id: "review-2", rating: 3, author: "이서연", title: "보통", content: "그냥 그래요", date: "", helpfulVotes: 0, verifiedPurchase: false },
     ]);
   });
 
@@ -42,7 +42,7 @@ describe("parseReviews", () => {
     const csv = "﻿ Rating , Title ,Content\n4,제목,내용";
 
     expect(parseReviews(csv)).toEqual([
-      { id: "review-1", rating: 4, author: "", title: "제목", content: "내용", date: "", helpfulVotes: 0 },
+      { id: "review-1", rating: 4, author: "", title: "제목", content: "내용", date: "", helpfulVotes: 0, verifiedPurchase: false },
     ]);
   });
 
@@ -50,7 +50,7 @@ describe("parseReviews", () => {
     const csv = ["id,rating,title,content,author,date,helpful_votes,verified_purchase", "r001,5,제목,내용,작성자,2024-01-15,12,true"].join("\n");
 
     expect(parseReviews(csv)).toEqual([
-      { id: "r001", rating: 5, author: "작성자", title: "제목", content: "내용", date: "2024-01-15", helpfulVotes: 12 },
+      { id: "r001", rating: 5, author: "작성자", title: "제목", content: "내용", date: "2024-01-15", helpfulVotes: 12, verifiedPurchase: true },
     ]);
   });
 
@@ -60,6 +60,27 @@ describe("parseReviews", () => {
     const reviews = parseReviews(csv);
 
     expect(reviews.map((r) => r.helpfulVotes)).toEqual([0, 0, 0, 3]);
+  });
+
+  it("verified_purchase는 true(대소문자 무시)만 참이다", () => {
+    const csv = [
+      "rating,title,content,verified_purchase",
+      "5,a,a,true",
+      "5,b,b,TRUE",
+      "5,c,c, True ",
+      "5,d,d,false",
+      "5,e,e,yes",
+      "5,f,f,1",
+      "5,g,g,",
+    ].join("\n");
+
+    expect(parseReviews(csv).map((r) => r.verifiedPurchase)).toEqual([true, true, true, false, false, false, false]);
+  });
+
+  it("verified_purchase 컬럼이 없으면 모두 거짓이고 적재는 계속된다", () => {
+    const reviews = parseReviews("rating,title,content\n5,제목,내용\n4,제목2,내용2");
+
+    expect(reviews.map((r) => r.verifiedPurchase)).toEqual([false, false]);
   });
 
   it("helpful_votes·date 컬럼이 없어도 적재한다", () => {
@@ -125,6 +146,8 @@ describe("loadReviews", () => {
     expect(reviews.every((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date))).toBe(true);
     expect(reviews.every((r) => Number.isInteger(r.helpfulVotes) && r.helpfulVotes >= 0)).toBe(true);
     expect(reviews.some((r) => r.helpfulVotes > 0)).toBe(true);
+    expect(reviews.every((r) => typeof r.verifiedPurchase === "boolean")).toBe(true);
+    expect(reviews[0].verifiedPurchase).toBe(true); // r001의 verified_purchase는 true
   });
 
   it("samples/review.csv의 원본 id(r001 등)를 그대로 쓰고 모두 고유하다", async () => {

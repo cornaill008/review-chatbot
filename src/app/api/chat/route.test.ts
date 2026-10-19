@@ -19,6 +19,7 @@ const review = (n: number, title: string, content: string, helpfulVotes: number)
   content,
   date: `2024-01-0${n}`,
   helpfulVotes,
+  verifiedPurchase: false,
 });
 
 // r1·r2만 "배터리"와 매칭된다. 나머지는 무관하며 helpful_votes는 r7 > r6 > r5 > r4 > r3 순이다.
@@ -51,7 +52,7 @@ beforeEach(async () => {
   resetMockStore();
   generate.mockReset();
   generate.mockResolvedValue("답변");
-  vi.stubEnv("ANTHROPIC_API_KEY", "test-key"); // 기본은 키가 있는 상황
+  vi.stubEnv("KIMI_API_KEY", "test-key"); // 기본은 키가 있는 상황
   vi.stubEnv("USE_MOCK", undefined);
   await new MockReviewRepository(async () => fixture).index();
 });
@@ -201,7 +202,7 @@ describe("오류 처리", () => {
 
     expect(res.status).toBe(500);
     expect(body.success).toBe(false);
-    expect(body.error).toContain("ANTHROPIC_API_KEY");
+    expect(body.error).toContain("KIMI_API_KEY");
     expect(await getMockMessages("a")).toEqual([]);
   });
 
@@ -216,6 +217,49 @@ describe("오류 처리", () => {
     expect(body.success).toBe(false);
     expect(body.error).not.toContain("secret");
     expect(await getMockMessages("a")).toEqual([]);
+  });
+
+  it("인증 실패(401)는 서비스의 오류 본문 없이 일반화된 문구만 응답하고 저장하지 않는다", async () => {
+    generate.mockRejectedValue(Object.assign(new Error("401 Invalid Authentication"), { status: 401 }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await post({ query: "배터리", chatId: "a" });
+    const body = await json(res);
+
+    expect(res.status).toBe(500);
+    expect(body).toEqual({ success: false, error: expect.stringContaining("답변을 생성하는 중 오류") });
+    expect(body.error).not.toMatch(/401|Authentication|KIMI_API_KEY/);
+    expect(await getMockMessages("a")).toEqual([]);
+  });
+
+  it("응답 시간 초과도 일반화된 문구만 응답하고 저장하지 않는다", async () => {
+    generate.mockRejectedValue(Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await post({ query: "배터리", chatId: "a" });
+    const body = await json(res);
+
+    expect(res.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.error).not.toMatch(/timed out|Timeout/i);
+    expect(await getMockMessages("a")).toEqual([]);
+  });
+
+  it("서버 로그에는 오류 이름·상태·메시지만 남기고 키 값은 가린다", async () => {
+    vi.stubEnv("KIMI_API_KEY", "sk-test-secret-1234567890");
+    generate.mockRejectedValue(
+      Object.assign(new Error("Incorrect API key provided: sk-test-secret-1234567890"), { status: 401 }),
+    );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await post({ query: "배터리" });
+    const body = await json(res);
+
+    const logText = logged.mock.calls.flat().map(String).join(" ");
+    expect(logText).toContain("HTTP 401");
+    expect(logText).toContain("[KIMI_API_KEY]");
+    expect(logText).not.toContain("sk-test-secret-1234567890");
+    expect(JSON.stringify(body)).not.toContain("sk-test-secret-1234567890");
   });
 
   it("한 대화의 실패가 다른 대화의 기록을 건드리지 않는다", async () => {
@@ -241,7 +285,7 @@ describe("오류 처리", () => {
 });
 
 describe("API 키가 없을 때", () => {
-  beforeEach(() => vi.stubEnv("ANTHROPIC_API_KEY", ""));
+  beforeEach(() => vi.stubEnv("KIMI_API_KEY", ""));
 
   it("답변 생성을 생략하고 검색 결과 JSON을 answer로 돌려준다 (sources는 빈 배열)", async () => {
     const res = await post({ query: "배터리는 얼마나 가요?", chatId: "a" });
@@ -253,7 +297,7 @@ describe("API 키가 없을 때", () => {
 
     const parsed = JSON.parse(body.answer!);
     expect(parsed.question).toBe("배터리는 얼마나 가요?");
-    expect(parsed.note).toContain("ANTHROPIC_API_KEY");
+    expect(parsed.note).toContain("KIMI_API_KEY");
     expect(parsed.count).toBe(2);
     expect(parsed.results.map((r: { rank: number; id: string }) => [r.rank, r.id])).toEqual([[1, "r1"], [2, "r2"]]);
     expect(parsed.results[0]).toEqual({
@@ -276,8 +320,20 @@ describe("API 키가 없을 때", () => {
     expect(parsed.results.map((r: { id: string }) => r.id)).toEqual(["r7", "r6", "r5", "r2", "r4"]);
   });
 
+  it("이전 ANTHROPIC_API_KEY만 있으면 키가 없는 것으로 보고 검색 결과 JSON을 돌려준다", async () => {
+    vi.stubEnv("KIMI_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_API_KEY", "old-claude-key");
+
+    const body = await json(await post({ query: "배터리" }));
+
+    expect(body.success).toBe(true);
+    expect(body.sources).toEqual([]);
+    expect(JSON.parse(body.answer!).note).toContain("KIMI_API_KEY");
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it("공백뿐인 키도 키 없음으로 취급한다", async () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "   ");
+    vi.stubEnv("KIMI_API_KEY", "   ");
 
     const body = await json(await post({ query: "배터리" }));
 

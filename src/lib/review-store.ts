@@ -5,11 +5,12 @@
  * (`indexRealReviews`, `searchRealReviews`, `saveRealMessage`, `getRealMessages`)를 추가하고
  * `repository/index.ts`의 팩토리에서 어댑터만 바꿔 끼운다. 라우트와 UI는 이 파일을 직접 알지 못한다.
  */
+import { DEFAULT_CHAT_ID, normalizeChatId } from "@/lib/chat-id";
 import { loadReviews } from "@/lib/csv";
 import { DEFAULT_TOP_K, searchReviews } from "@/lib/search";
 import type { ChatMessage, Review, SourceReview } from "@/lib/types";
 
-export const DEFAULT_CHAT_ID = "default";
+export { DEFAULT_CHAT_ID };
 export const MAX_MESSAGES_PER_CHAT = 200;
 export const MAX_CHATS = 100;
 
@@ -29,10 +30,6 @@ const globalForStore = globalThis as typeof globalThis & { __mockReviewStore?: M
 function getStore(): MockStore {
   globalForStore.__mockReviewStore ??= { reviews: [], indexed: false, chats: new Map() };
   return globalForStore.__mockReviewStore;
-}
-
-function normalizeChatId(chatId: string | undefined): string {
-  return chatId?.trim() || DEFAULT_CHAT_ID;
 }
 
 /** `samples/review.csv`를 읽어 메모리에 적재(재인덱싱이면 대체)하고 적재 건수를 반환한다. */
@@ -63,7 +60,7 @@ export async function saveMockMessage(chatId: string | undefined, message: ChatM
 
   const messages = chats.get(id) ?? [];
   chats.delete(id); // 삭제 후 다시 넣어 "가장 최근에 저장한 대화"를 맨 뒤로 보낸다.
-  messages.push(message);
+  messages.push({ role: message.role, content: message.content }); // sources는 실데이터 모드에서만 저장한다.
   if (messages.length > MAX_MESSAGES_PER_CHAT) messages.splice(0, messages.length - MAX_MESSAGES_PER_CHAT);
   chats.set(id, messages);
 

@@ -1,4 +1,5 @@
 import { HISTORY_LIMIT, MissingApiKeyError, generateAnswer, hasApiKey } from "@/lib/chain";
+import { ConfigError, describeError } from "@/lib/errors";
 import { currentMode, getRepository } from "@/lib/repository";
 import { formatRetrievalJson } from "@/lib/retrieval-json";
 import { DEFAULT_TOP_K } from "@/lib/search";
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
 
     // 성공했을 때만 질문과 답변을 함께 저장한다.
     await repository.appendMessage(chatId, { role: "user", content: query });
-    await repository.appendMessage(chatId, { role: "assistant", content: answer });
+    await repository.appendMessage(chatId, { role: "assistant", content: answer, sources });
 
     const body: ChatResponse = {
       success: true,
@@ -69,8 +70,9 @@ export async function POST(request: Request) {
     };
     return Response.json(body);
   } catch (error) {
-    if (error instanceof MissingApiKeyError) return fail(error.message, 500);
-    console.error("[api/chat] 답변 생성 실패", error);
+    // 키 누락·설정 누락은 변수 이름만 담겨 있어 그대로 알린다. 그 밖의 오류는 일반화된 문구만 응답한다.
+    if (error instanceof MissingApiKeyError || error instanceof ConfigError) return fail(error.message, 500);
+    console.error("[api/chat] 답변 생성 실패:", describeError(error));
     return fail("답변을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", 500);
   }
 }

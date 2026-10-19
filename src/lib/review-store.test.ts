@@ -14,8 +14,8 @@ import {
 import type { ChatMessage, Review } from "@/lib/types";
 
 const fixture: Review[] = [
-  { id: "r1", rating: 5, author: "a", title: "배터리", content: "오래 가요", date: "2024-01-01", helpfulVotes: 3 },
-  { id: "r2", rating: 3, author: "b", title: "음질", content: "보통이에요", date: "2024-01-02", helpfulVotes: 9 },
+  { id: "r1", rating: 5, author: "a", title: "배터리", content: "오래 가요", date: "2024-01-01", helpfulVotes: 3, verifiedPurchase: false },
+  { id: "r2", rating: 3, author: "b", title: "음질", content: "보통이에요", date: "2024-01-02", helpfulVotes: 9, verifiedPurchase: false },
 ];
 
 const user = (content: string): ChatMessage => ({ role: "user", content });

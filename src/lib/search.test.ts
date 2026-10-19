@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { loadReviews } from "@/lib/csv";
-import { searchReviews, tokenize } from "@/lib/search";
+import { searchReviews, toDisplayScore, tokenize } from "@/lib/search";
 import type { Review } from "@/lib/types";
 
 function review(id: number, title: string, content: string, helpfulVotes = 0): Review {
-  return { id: `review-${id}`, rating: 5, author: "작성자", title, content, date: "2024-01-01", helpfulVotes };
+  return { id: `review-${id}`, rating: 5, author: "작성자", title, content, date: "2024-01-01", helpfulVotes, verifiedPurchase: false };
 }
 
 const inRange = (score: number) => score >= 0.65 && score <= 0.98;
@@ -167,6 +167,35 @@ describe("searchReviews: 매칭 없을 때 인기 리뷰 기본 반환 (2.2)", (
     const mixed = [review(1, "배터리", "좋아요", 0), review(2, "무관", "무관", 99)];
 
     expect(searchReviews(mixed, "배터리").map((r) => r.id)).toEqual(["review-1"]);
+  });
+});
+
+describe("toDisplayScore (Mock 조합 점수와 실데이터 Pinecone 점수 공용)", () => {
+  it("0~1을 0.65~0.98로 바꾼다 (0.5 → 0.82, 0 → 0.65, 1 → 0.98)", () => {
+    expect(toDisplayScore(0)).toBe(0.65);
+    expect(toDisplayScore(0.5)).toBe(0.82);
+    expect(toDisplayScore(1)).toBe(0.98);
+  });
+
+  it("소수 둘째 자리까지 반올림한다", () => {
+    expect(toDisplayScore(0.24113620817661285)).toBe(0.73); // 실제 Pinecone 점수 예시
+    expect(toDisplayScore(0.006322240456938744)).toBe(0.65);
+  });
+
+  it("범위를 벗어난 점수는 제한한다 (1.3 → 0.98, -0.2 → 0.65)", () => {
+    expect(toDisplayScore(1.3)).toBe(0.98);
+    expect(toDisplayScore(-0.2)).toBe(0.65);
+  });
+
+  it("숫자가 아니면 최솟값으로 본다", () => {
+    expect(toDisplayScore(Number.NaN)).toBe(0.65);
+    expect(toDisplayScore(Number.POSITIVE_INFINITY)).toBe(0.65);
+  });
+
+  it("점수가 클수록 같거나 크다(순위가 유지된다)", () => {
+    const scores = [0, 0.01, 0.24, 0.5, 0.77, 1].map(toDisplayScore);
+
+    expect([...scores].sort((a, b) => a - b)).toEqual(scores);
   });
 });
 

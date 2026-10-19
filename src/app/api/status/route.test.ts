@@ -17,6 +17,7 @@ const review = (id: number, title: string, content: string): Review => ({
   content,
   date: "2024-01-01",
   helpfulVotes: 0,
+  verifiedPurchase: false,
 });
 
 const fixture: Review[] = [review(1, "배터리", "오래 가요"), review(2, "음질", "보통이에요"), review(3, "착용감", "편해요")];
@@ -71,6 +72,43 @@ describe("GET /api/status", () => {
     const { res, body } = await status();
 
     expect(res.status).toBe(500);
-    expect(body).toEqual({ success: false, error: "저장소 오류" });
+    // 서비스의 오류 메시지는 응답에 싣지 않고 일반화된 문구만 보낸다.
+    expect(body).toEqual({ success: false, error: "상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." });
+    expect(JSON.stringify(body)).not.toContain("저장소 오류");
+  });
+
+  it("실데이터 모드에서 설정이 없으면 빠진 변수의 이름만 담아 500으로 응답한다", async () => {
+    vi.stubEnv("USE_MOCK", "false");
+    for (const name of [
+      "PINECONE_API_KEY",
+      "PINECONE_INDEX_NAME",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    ]) {
+      vi.stubEnv(name, "");
+    }
+
+    const { res, body } = await status();
+
+    expect(res.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain("실데이터 모드 설정이 없습니다");
+    expect(body.error).toContain("PINECONE_API_KEY");
+  });
+
+  it("외부 서비스 오류의 로그에는 키 값이 남지 않는다", async () => {
+    vi.stubEnv("PINECONE_API_KEY", "pcsk_status_secret_1234567890");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(repositoryModule, "getRepository").mockImplementation(() => {
+      throw new Error("bad key pcsk_status_secret_1234567890");
+    });
+
+    await status();
+
+    const logText = logged.mock.calls.flat().map(String).join(" ");
+    expect(logText).toContain("[PINECONE_API_KEY]");
+    expect(logText).not.toContain("pcsk_status_secret_1234567890");
   });
 });
